@@ -1,0 +1,137 @@
+// Rundi Liu <rundil>
+// Boxiang Guo <gbx>
+
+
+// X9 = i
+// X10 = addr+i
+// X11 = addr[i]
+// X14 = store SUBS value to compare if greater than or less than
+// X15 = for logical shift left
+// X20,X21,X22,X23,X24 = stack
+
+main:
+        ADD X0, XZR, XZR
+        ADDI X1, XZR, #512
+        BL Fill
+        DUMP   // show memory after fill
+        ADD X0, XZR, XZR
+        ADDI X1, XZR, #512
+        BL InsertionSort
+        B end // show memory after InsertionSort
+
+Fill:
+        ADD X10, XZR, X1
+        ADD X11, XZR, X0
+        FillLoop:
+                SUB X14, X10, XZR
+                CBZ X14, return
+                STUR X10, [X11, #0] // store X10 at X11
+                SUBI X10, X10, #1
+                ADDI X11, X11, #8
+                B FillLoop
+
+ShiftRight:
+        SUBI X9, X2, #1 // i = final - 1
+        ShiftRightLoop:
+                SUBS X14, X9, X1 // i - pos
+                B.LT return // return if i<pos
+                LSL X15, X9, #3  // X15 = i*8
+                ADD X10, X0, X15
+                LDUR X11, [X10, #0] // X11 = addr[i]
+                STUR X11, [X10, #8] // addr[i+1] = temp
+                SUBI X9, X9, #1 // i--
+                B ShiftRightLoop
+
+FindSortedPos:
+        ADDI X9, XZR, #0  // i = 0
+        FindSortedPosLoop:
+                SUBS X14, X9, X2 // compare i and final
+                B.GT returnI // return i if i>final
+                LSL X15, X9, #3  // X15 = i*8
+                ADD X10, X0, X15
+                LDUR X11, [X10, #0] // X11 = addr[i]
+                SUBS X14, X11, X1 // compare addr[i] and val
+                B.GE returnI // return i if addr[i]>=val
+                ADDI X9, X9, #1 // i++
+                B FindSortedPosLoop
+        returnI:
+                ADD X0, X9, XZR  // return the index
+                BR LR
+
+InsertSortedPos:
+        //make room on stack and backs up saved register
+        SUBI SP, SP, #48
+        STUR LR, [SP, #0]
+        STUR X20, [SP, #8]
+        STUR X21, [SP, #16]
+        STUR X22, [SP, #24]
+        STUR X23, [SP, #32]
+        STUR X24, [SP, #40]
+
+        ADD X20, X0, XZR // X20 = addr
+        ADD X21, X1, XZR // X21 = pos
+        ADD X22, X2, XZR // X22 = final
+        LSL X15, X21, #3  // pos*8
+        ADD X10, X15, X20 // addr[pos]
+        LDUR X23, [X10, #0] // v = addr[pos]
+        ADD X0, X20, XZR
+        ADD X1, X23, XZR
+        ADD X2, X21, XZR
+        BL FindSortedPos // call FindSortedPos
+        ADD X24, X0, XZR // p = FindSortedPos(addr, v, pos)
+        ADD X0, X20, XZR
+        ADD X1, X24, XZR
+        ADD X2, X21, XZR
+        BL ShiftRight // ShiftRight(addr, p, pos)
+        LSL X15, X24, #3 // p*8
+        ADD X10, X15, X20  // addr + p
+        STUR X23, [X10, #0] // addr[p] = v
+
+        // restore stack
+        LDUR X24,[SP,#40]
+        LDUR X23,[SP,#32]
+        LDUR X22,[SP,#24]
+        LDUR X21,[SP,#16]
+        LDUR X20,[SP,#8]
+        LDUR LR,[SP,#0]
+        ADDI SP,SP,#48
+        BR LR
+
+InsertionSort:
+        //make room on stack and backs up saved register
+        SUBI SP, SP, #48
+        STUR LR, [SP, #0]
+        STUR X20, [SP, #8]
+        STUR X21, [SP, #16]
+        STUR X22, [SP, #24]
+        STUR X23, [SP, #32]
+        STUR X24, [SP, #40]
+
+        ADD X20, X0, XZR // X20 = addr
+        ADD X21, X1, XZR // X21 = length
+        ADDI X22, XZR ,#1 // i = 1
+        SUBI X23, X21, #1 // X23 = length - 1
+        InsertionSortLoop:
+                SUBS X15, X22, X23 // i - (length-1)
+                B.GT endInsertionSortLoop // from i to length-1, return if i>length-1
+                ADD X0, X20, XZR
+                ADD X1, X22, XZR
+                ADD X2, X23, XZR
+                BL InsertSortedPos // call InsertSortedPos(addr, i, length-1)
+                ADDI X22, X22, #1 // i++
+                B InsertionSortLoop
+        endInsertionSortLoop:
+                // restore the stack
+                LDUR X24, [SP, #40]
+                LDUR X23, [SP, #32]
+                LDUR X22, [SP, #24]
+                LDUR X21, [SP, #16]
+                LDUR X20, [SP, #8]
+                LDUR LR, [SP, #0]
+                ADDI SP, SP, #48
+                BR LR
+return:
+        BR LR
+
+end:
+        DUMP
