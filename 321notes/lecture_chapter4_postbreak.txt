@@ -1,0 +1,317 @@
+SUBI X0, X0, #1
+CMBZ XO, foo
+ADD ...
+foo:
+SUB ...
+
+With no branch prediction:
+INST    1       2       3       4       5       6       7       8       9
+SUBI    IF      ID      EX      MEM     WB
+CMBZ            IF      ID      EX      MEM     WB
+???                     --      --      IF      ID      EX      MEM     WB
+
+Static Branch Prediction -- "static" means known at compile time
+* Forward branches not taken/backward branches taken
+  while (foo) {
+    stuff..;
+  }
+  other stuff;
+
+INST    1       2       3       4       5       6       7       8       9
+SUBI    IF      ID      EX      MEM     WB
+CMBZ            IF      ID      EX      MEM     WB
+ADD                     IF      ID      EX      MEM     WB
+SUB                             IF      ID      EX      MEM     WB
+
+* All branches taken
+
+INST    1       2       3       4       5       6       7       8       9
+SUBI    IF      ID      EX      MEM     WB
+CMBZ            IF      ID      EX      MEM     WB
+SUB                     IF      ID      EX      MEM     WB
+
+* All branches not taken
+
+INST    1       2       3       4       5       6       7       8       9
+SUBI    IF      ID      EX      MEM     WB
+CMBZ            IF      ID      EX      MEM     WB
+ADD                     IF      ID      EX      MEM     WB
+SUB                             IF      ID      EX      MEM     WB
+
+
+Dynamic Branch Prediction
+
+* 1-bit buffer called a "Branch Prediction Buffer"
+** We keep a table indexed by low-order bits of PC
+   Works because of expoitation of the principal of locatality
+   This cache is called a "Branch History Table".
+* 2-bit branch prediction buffer
+  for (i from 0 to n)
+    for (j from 0 to m) // 1-bit predictor gets this branch wrong twice
+                        // per iteration of outer loop
+  In order to ameliorate this, we can add a second bit to the predictor
+    That is, add some hysteresis.
+  Two bits are used with highest-order bit used for prediction
+  The extra bit adds memory (hysteresis) to the circuit which reduces
+    overcorrection
+
+Predicting Branch Targets
+
+SUBI X0, X0, #1
+CMBZ XO, foo
+ADD ...
+foo:
+SUB ...
+
+Assume X0 is zero at compare instruction and the dynamic branch predictor
+correctly predicted that we should take the branch:
+INST    1       2       3       4       5       6       7       8       9
+SUBI    IF      ID      EX      MEM     WB
+CMBZ            IF      ID      EX      MEM     WB
+SUB                     --      IF      ID      EX      MEM     WB
+
+Bubble is needed in pipeline in order to force a wait for target address
+computation.
+
+Use a Branch Target Buffer: A cache that is indexed by a branch address amd
+stores the address of the branch target.
+
+INST    1       2       3       4       5       6       7       8       9
+SUBI    IF      ID      EX      MEM     WB
+CMBZ            IF      ID      EX      MEM     WB
+SUB                     IF      ID      EX      MEM     WB
+with correctly predicted branch target from branch target buffer
+
+What do we do in the event of a branch mis-prediction:
+Invalidate the speculative instructions be de-asserting all writes
+
+Exceptions:
+
+Exceptions include: Reset
+                    I/O
+                    O/S Invocation - O/S and HW have to work together a lot
+                    Floating point over- or under-flow
+                    Undefined instructions
+                    Malfunction
+
+When an exception occurs: We may have to terminate the process
+                          It may be that the hardware can recover
+                          It may be that the software can recover
+All of these are essentially branches, and handling them is (almost)
+identical to handling control hazards 
+
+To keep track of the address of the exception:
+        Two registers: ELR - Exception Link Register
+                             Records the address where the exception occured;
+                             this allows control to return to this address
+                             after handling exception
+                       ESR - Exception Syndrome Register
+                             Used to signal the reason for the exception
+
+
+Contrat between the hardware and software (O/S):
+        Hardware will: Stop the offending instruction
+                       Complete older instructions
+                       Stop/invalidate subsequent, already-issued instructions
+                       Set ELR and ESR
+                       Branch to a pre-arranged address
+                              On ARM, that address is 0x1C090000
+        Software: Check the cause of the exception
+                  Act approptiately
+
+Precise vs Imprecise exceptions
+
+Precise exceptions - We know exactly where it occurred
+Imprecise exceptions - We do not know exactly where they occured
+                       Starts to matter when we have speculative execution
+                                                     out-of-order execution
+                                                     very deep pipelines
+
+Instruction-level Parallelism
+        Exploit it by: Pipelining - Deeper pipelines (theoretically) allow
+                                    higher IPC.  But require more complexity
+                                    (in both hardware and software).
+                       Multiple issue - Starting multiple instructions per
+                                        cycle. 
+                                        Example: 4 GHz, 4-way multiple issue
+                                                 Theoretically achieve 16 BIPS
+
+Static vs. Dynamic Multiple issue
+       Static issue: Compiler schedules "issue slots" or "packets" of
+                     instructions that are issued together.
+                     Example: A packet may have:
+                              1) An ALU or branch instruction; and
+                              2) A load or a store
+                              There may be no dependencies within a packet
+                              If one of the pair cannot run with some other 
+                              available instruction, the compiler issues a NOP
+                              Effectively, instrutions are 64 bits wide (in
+                              LEGv*), hence the name "VLIW": Very Long
+                              Instruction Word.
+       Dynamic issue: HW decides which instructions to issue each cycle
+
+
+Loop Unrolling - Used as an optimization
+
+for (i = 0; i < 1000; i++) { // CBZ, ADDI, SUB
+  a[i]++;                    // LDUR ADDI STUR
+}                            // B for
+
+4 instructions (CBZ, ADDI, SUB, B) per iteration -- bookkeeping
+3 instructions per iteration to actually do the needed work
+
+for (i = 0; i < 1000; i += 2) { // CBZ, ADDI, SUB
+  a[i]++;                    // LDUR ADDI STUR
+  a[i + 1]++;                    // LDUR ADDI STUR ADDI
+}                            // B for
+
+6 instructions of bookkeeping
+5 instrucions of work
+
+for (i = 0; i < 1000; i += 4) { // CBZ, ADDI, SUB
+  a[i]++;                    // LDUR ADDI STUR
+  a[i + 1]++;                    // LDUR ADDI STUR ADDI
+  a[i + 2]++;                    // LDUR ADDI STUR ADDI
+  a[i + 3]++;                    // LDUR ADDI STUR ADDI
+}                            // B for
+
+7 bookkeeping (overhead)
+12 work
+
+Unrolling loops in with GCC:
+
+gcc -o filename
+
+gcc -O0
+gcc -O1
+gcc -O2 -funroll-loops
+gcc -O3: Dangerous.  Uses optimizations that are not provably sound
+
+gcc -funroll-loop -S file.c
+
+file.s
+
+C Compilers compile in 4 stages:
+
+1) Pre-processing: gcc -E (cpp)
+2) Compiling: gcc -S
+3) Assembling gcc -c 
+4) Linking: gcc
+
+
+for (i = 0; i < 1000; i++) {
+  a[i]++;                   
+}                           
+
+X0 -> i
+X3 index (i * 8)
+X4-> Indexed address, X1 -> base address (a)
+
+                        A/B   L/S
+for:                 //
+SUBIS X2, X0, #1000  //  *
+CBZ X2, end          //  *
+LSL X3, X0, #3       //  *
+ADD X4, X1, X3       //  *
+LDUR X5, [X4, #0]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #0]    //        *
+ADDI X0, X0, #1      //  *
+B for                //  *
+end:                 //
+
+No unrolling: 7 ALU/Branch, 2 load/store
+
+SUBIS/NOP
+CBZ/NOP
+LSL/NOP
+ADD/NOP
+NOP/LDUR
+ADDI/NOP
+ADDI/STUR
+B/NOP
+
+Saved 1 cycle with multiple issue.
+
+
+Unroll loop 1 time:
+                        A/B   L/S
+for:                 //
+SUBIS X2, X0, #1000  //  *
+CBZ X2, end          //  *
+LSL X3, X0, #3       //  *
+ADD X4, X1, X3       //  *
+LDUR X5, [X4, #0]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #0]    //        *
+LDUR X5, [X4, #8]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #8]    //        *
+ADDI X0, X0, #2      //  *
+B for                //  *
+end:                 //
+
+SUBIS/NOP
+CBZ/NOP
+LSL/NOP
+ADD/NOP
+NOP/LDUR
+ADDI/LDUR
+ADDI/STUR
+ADDI/STUR
+B/NOP
+
+
+Unroll loop 3 times:
+                        A/B   L/S
+for:                 //
+SUBIS X2, X0, #1000  //  *
+CBZ X2, end          //  *
+LSL X3, X0, #3       //  *
+ADD X4, X1, X3       //  *
+LDUR X5, [X4, #0]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #0]    //        *
+LDUR X5, [X4, #8]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #8]    //        *
+LDUR X5, [X4, #16]   //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #16]   //        *
+LDUR X5, [X4, #24]   //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #24]   //        *
+ADDI X0, X0, #4      //  *
+B for                //  *
+end:                 //
+
+
+Unroll loop 5 times achieves parity:
+                        A/B   L/S
+for:                 //
+SUBIS X2, X0, #1000  //  *
+CBZ X2, end          //  *
+LSL X3, X0, #3       //  *
+ADD X4, X1, X3       //  *
+LDUR X5, [X4, #0]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #0]    //        *
+LDUR X5, [X4, #8]    //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #8]    //        *
+LDUR X5, [X4, #16]   //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #16]   //        *
+LDUR X5, [X4, #24]   //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #24]   //        *
+LDUR X5, [X4, #32]   //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #32]   //        *
+LDUR X5, [X4, #40]   //        *
+ADDI X5, X5, #1      //  *
+STUR X5, [X4, #40]   //        *
+ADDI X0, X0, #6      //  *
+B for                //  *
+end:                 //
+

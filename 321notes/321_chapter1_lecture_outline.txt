@@ -1,0 +1,100 @@
+* Syllabus
+* Rapid performance increase in computing hardware
+** Moore's Law
+   Not: Clock frequency doubles every 1.5 years
+   Not: Clock frequency doubles every 2 years
+   Not: Clock frequence grows exponentially
+   Transistor density increases exponentially
+* Items which affect program performance:
+   Choice of algorithm(s)
+   Language
+   Compiler
+   Architecture (ISA - Instruction Set Architecture (analogous to API))
+   - ADD X0, X1, X2
+   Architecture (implementation) and memory systems
+   I/O Systems
+* How did computers become so fast?
+   Design for the future
+   Use abstraction effectively
+   Design for the common case
+   Exploit parallelism
+   Predict
+
+   Spatial locality - Prefetch data that we expect to need soon based on
+   locations that we've use recently
+   Temporal locality - reusing lcations
+
+   int a[10];
+   for (i = 0; i < 10; i++) {
+     a[i] = i;
+   }
+
+   Use hierarchical structures
+
+   Main memory - ~10^5-10^6 cycles to get data from main memory
+   Register - 0 cycles
+   L1 cache - ~10 cycles
+   L2 cache - ~100 cycles
+   L3 cache - ~1000 cycles
+
+   Be dependable
+
+   
+
+* Five classic components of a computer
+   Input - keyboard, network, serial port, hard drive, etc.
+   Output - monitor, printer, serial port network, hard drives, etc.
+   Memory - RAM, volatile storage
+   Datapath - Pathways that data take to and from input, memory, and the CPU
+   Control - How the computer "decides" what to do next: what data do we
+   need, what instruction do we execute on that data, what do we do with the result
+
+* Measuring performance
+
+      CPU Time = CPU clock cycles X Clock cycle time
+
+      Clock cycle time = 1 / Clock rate
+
+      CPU Time = CPU clock cycles / Clock rate
+
+** To improve program performance, either reduce clock cycles, or increase
+   clock rate (reduce cycle time)
+
+** Example: A program runs in 15 seconds on a 2.5 GHz processor (CPUa).  We
+            want to design a computer (CPUb) that can run it in 10 seconds.
+
+* The CPU Performance Equation
+
+                 Instruction count X Cycles per instruction
+      CPU Time = ------------------------------------------
+                                Clock rate
+
+
+** Example: A processor has 3 classes of instructions (perhaps they're
+            control instructions, integer instructions and floating point
+            instructions).  Instructions of class A take 4 cycles to execute.
+            Instructions of class B take 3 cycles.  And instructions of class
+            C take 6 cycles.  Program 1 and program 2 compute exactly the
+            same result.  Program 1 has 450 class A, 375 class B and 200
+            class C instructions.  Program 2 has 375 class A, 130 class B and
+            250 class C instructions.  Which program is faster?  How long do
+            they take to run on a 3.5 GHz processor?
+
+* One more equation, boiling everything down to its simplest form:
+
+             Seconds   Instructions   Clock cycles     Seconds
+      Time = ------- = ------------ X ------------ X -----------
+             Program      Program     Instruction    Clock cycle
+
+* The power wall
+** Beginning in the early to mid oughts, processors started to become
+   difficult to cool
+*** Dynamic power
+       Energy is proportional to capacitative load * voltage squared
+       Energy is power * time (i.e., the integeral of power over time)
+       Power is proportional to voltage squared * frequency
+*** Static power - transistors leak!
+** The power wall is fundementally why we've moved from uniprocessors to
+   multicore processors.
+** Designing processors (or programs) to be fast and designing them to be
+   energy efficient are not mutually exclusive goals.

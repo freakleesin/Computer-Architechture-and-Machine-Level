@@ -1,0 +1,552 @@
+Memory Organization
+
+Memory organization in computer architecture is built around the "principal
+of locality"
+
+Principal of Locality - Programs access a very small portion of their address
+                        space at any given time.
+
+                        Temporal Locality - Data that you've used (accessed)
+                                            recently is likely to be needed
+                                            again soon
+                        Spatial Locality - Data that is near (address) data
+                                           that you've used recently is
+                                           likely to be needed soon.
+
+                        for (i = 0; i < foo; i++)
+                          a[i] = (a[i - 1] + a[i] + a[i + 1]) / 3
+                        The induction variable (i), the control instructions,
+                          and the (i +- 1) in the array accesses are all
+                          examples of temporal locality.  The sequential
+                          traversal of the array is an example of spatial
+                          locality.
+
+Memory Heirarchies
+Physical constructs that take advantage of locality.
+Lowest level - Disk (has everything)
+Highest level - Level 1 cache (very small, has little)
+Multiple levels in between - Main memory, lower-level caches (if present)
+                             "In between" in two senses - Physically
+                                                          Contents
+Data is transferred between layers in "blocks" or "lines"
+  Because data is transfered in blocks, when we bring in a byte, we also
+  bringing in neighboring bytes.  This helps caches behave efficiently.
+  If data is present in a cache when we attempt to access it, we say it
+    "hits" - hit rate = hits / accesses
+  Data not present "misses" - miss rate = misses / access = 1 - hit rate
+  Data *always* comes from the highest level cache.
+  
+
+Physical memory
+
+SRAM - Static RAM
+       Less than a few nanoseconds access
+       Made with a few (6) transistors per bit
+       Hold value as long as charge remains
+       Cost a few thousand dollars per GB
+       Used for register files, usually L1 cache
+DRAM - Dynamic RAM
+       less than a few tens of nanoseconds per access
+       A few tens of dollars per GB
+       Made with a single transistor and a single capacitor
+       Main memory, maybe lowest level cache
+Magnetic disk - Less than a few 10s of milliseconds per access (10e6x slower
+                than DRAM)
+                A few 10s of dollars per TB
+                Moving parts
+Flash disk - Disk, here, is an anachronism
+             Less than about 1 millisecond per access
+             About a dollar per GB
+             SSD (Solid State Device), no moving parts
+
+Magenetic Tape - Sounds completely outdated, but still used extensively!
+                 Incredibly cheep and dense
+                 
+Caches
+
+Direct Mapped Caches
+
+Address is broken into three parts: Tag, Index, and Offset
+  Tag: High-order bits, used to check if we've got the right data
+  Index: middle bits, used to get the right line in the cache
+  Offset: Indexes a bit in the line
+
+Example cache we drew: 8 lines, so 3 index bits
+                       Let's say each line is 16 bytes, implies 4 offset bits
+                       Let's say the system has 64-bit addresses
+4 lowest-order bits are offset
+next 3 bits are index
+highest-order 57 bits (everything left over) are tag
+
+How big is the cache?  8 lines * 16 bytes per line = 128 bytes storage
+                       (57 + 1) bits * 8 lines = 58 bytes overhead
+                       Total size is 186 bytes
+
+Valid bit keeps track of the validity of the line - A line is valid if it
+belongs to the running program, and it was written before it was read.
+
+Set-associative Caches
+
+Sets of lines with same index exists side by side in the cache
+Prevents pre-mature ejection of data from the cache
+
+Like direct mapped, address is broken into three parts.
+Example cache we drew: 8 sets with 4 lines per set, for a total of 32 lines
+                       Each line is, let's say, 16 bytes
+                       32 lines * 16 bytes per line = 512 bytes
+                       4 bits for offset
+                       3 bits for index
+                       57 bits for tag
+                       1 bit for valid bit
+
+                       1 + 57 bits per line * 32 lines = 4 * 58 bytes = 132
+                                                                 bytes
+                                                                 overhead
+                       512 bytes storage + 132 bytes overhead = 644 bytes
+                                                                 total
+
+Fetching a line
+
+type m[y][x];
+
+&m[j][i] == m + (j * x) + i
+
+C compiler autoatically multiplies constant terms by the size of the type
+being referenced when doing pointer arithmetic
+
+If a cache has n offset bits, i.e., lines are 2^n bytes, the cache lines have
+2^n byte alignment.  Thus, the address of each line in the cache must be zero
+mod 16.  Therefore, when fetching data at an address, we actually fetch the
+entire line that begins the most recent line-length region which began with
+an address that was properly aligned (i.e., address zero mod line length).
+That address is found by bitwise ANDing with zeros in the offset bits (the
+rest ones).
+
+a cache is like a hash table where the hash function is calculated by masking
+out the index bits.
+
+
+Motivating associative caches
+
+We have: 8 line direct-mapped cache
+         first access maps to line 0 
+         second access maps to line 4
+         third access maps to line 8 (0 mod 8)
+         fourth access maps to line 12 (4 mod 8)
+         This occurs in a loop.
+
+         First iteration: 0 is a "compulsory miss" - A miss that must happen
+         because we've never accessed this (or a sufficiently close) address
+         before.
+                          4 is also compulsory
+                          8 is a compulsory the firs time and capacity thereafter- miss because there isn't
+         enough space
+                          12 is also a capacity miss
+
+Asociative caches solve this problem by allowing multiple lines to map to
+each index.  The above example will require 2-way associativity in order to
+solve the problem.
+
+n-way associative cache: a cache with n lines per set
+                         Common, real values for n are 2 and 4 (less often 3)
+Fully associative cache: Pretty much all processors have one, but that one is
+                         not general purpose, it's for the TLB (Translation
+                         Lookaside Buffer), which we'll talk about in a week
+                         or so.
+
+Cache Replacement Policies (or "strategies"): A "replacement policy" is an
+algorithm that determines which line to replace when bringing new data into a
+set.
+
+Most common replacement policy in real caches: LRU (least recently used)
+LRU must keep track of line access.  With a 2-way associative cache, a single
+bit can keep track: off -> line 0 was most recently used; on -> line 1 was
+most recently used.
+Other policies include: FIFO (first in first out; "Belady's Anomaly)
+                        NRU (not recently used)
+
+Some cache problems:
+
+1) An 8 kB direct-mapped cache has 32 byte lines.  How many lines does it
+   have?  How is an address break down into tag, index, and offset on a
+   64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+2^13 2^5 -> 13 - 5 = 8 -> 2^8 = 256 lines
+
+2^5 bytes per line -> 5 bits for offset
+2^8 lines -> 8 bits for index
+64-bit address space - (8 + 5) = 51 bits for tag
+
+51 + 1 = 52 bits over per line * 256 = 1664 bytes of overhead
+
+2) A 16 kB 2-way set associative cache has 32 byte lines.  How many lines
+   does it have?  How is an address break down into tag, index, and offset on
+   a 64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+2^14 bytes 2^5 bytes per line ->2^(14-5=9) lines 512 lines
+2^9 / 2-way associativity -> 2^8 sets
+5 bits offset
+8 bits index
+51 bits tag
+
+51 + 1 = 52 bits overhead per line * 2^9
+                                   * 2^6 = 3328
+
+3) An 8 kB 4-way set associative cache has 32 byte lines.  How many lines
+   does it have?  How is an address break down into tag, index, and offset on
+   a 64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+2^13 bytes in cache, 2^5 bytes per line -> 2^8 lines
+2^8 line and 4 lines per set -> 2^6 sets
+5 bits for offset
+6 bits for index
+53 bits of tag
+
+54 bits of overhead per line * 2^8 lines / 2^3 bits per byte = 1728 bytes of
+overhead
+
+4) A 24 kB 3-way set associative cache has 32 byte lines.  How many lines
+   does it have?  How is an address break down into tag, index, and offset on
+   a 64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+3 * 2^13 bytes cache, 2^5 bytes per line -> 2^8 * 3 lines = 768 lines
+5 bits offset
+8 bits index
+51 bits tag
+
+52 bits overhead per line * 768 lines / 8 bits per line -> 4992 bytes
+overhead
+
+5) An 64 kB direct-mapped cache has 64 byte lines.  How many lines does it
+   have?  How is an address break down into tag, index, and offset on a
+   64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+2^16 bytes in the cache, lines are 2^6, 2^16 / 2^6 = 2^10 lines
+
+offset is 6 bits
+index is 10 bits
+tag is 48 bits (64 - (10 + 6))
+
+48 + 1 = 49 bits of overhead per line; 49 bits * 2^10 lines = 6272 bytes of
+overhead
+
+6) An 64 kB 8-way set associative cache has 32 byte lines.  How many lines
+   does it have?  How is an address break down into tag, index, and offset on
+   a 64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+2^16 byte cache, lines are 2^5, 2^16 / 2^5 = 2^11 lines -> 2^8 sets
+offset is 5 bits
+index is 8 bits
+tag is 51 bits
+
+Overhead: 51 + 1 = 52 bits per line * 2^11 lines = 13312 bytes overhead
+
+7) An 80 kB 5-way set associative cache has 32 byte lines.  How many lines
+   does it have?  How is an address break down into tag, index, and offset on
+   a 64-bit architecture?  If each line has a tag and a valid bit, how much
+   space is required for overhead?
+
+   5 * 16 kB = 5 * 2^14 bytes, 2^5 line length, 5 * 2^9 = 2560 lines
+   5 lines per set, 2^9 sets
+   offset is 5 bits
+   index is 9 bits
+   tag is 50 bits
+
+   50 + 1 bits overhead per line * 5 * 2^9 bits -> 16320 bytes overhead
+
+8) A direct-mapped cache requires 6 offset bits and 11 index bits to find
+   data on a 64-bit architecture.  How large is the cache?
+
+   6 offset bits -> 2^6 = 64 bytes line length
+   11 index bits -> 2^11 = 2048 lines
+   2^6 * 2^11 = 2*17 = 128 kB = 131072 bytes
+
+9) A 4-way set associative cache requires 5 offset bits and 9 index bits to
+find data on a 64-bit architecture.  How large is the cache?  How many sets
+are there?
+
+5 offset bits -> 2^5 = 32 byte line length
+9 index bits -> 2^9 = 512 sets
+4 set * 2^9 = 2^11 = 2048 lines
+Cache is 2^5 * 2^11 = 2^16 = 65536 bytes = 64 kB
+
+
+Dependability of memory systems:
+
+MTTF - Mean Time To Failure
+MTTR - Mean Time To Repair
+
+Availability = MTTF / (MTTF + MTTR)
+
+"Nines of Availability"
+
+One 9 -> 90% availability -> 36.5 days of downtime per year
+Two 9s -> 99% availability -> 3.7 days of downtime per year
+Three 9s -> 99.9% availability -> 9 hours per year of downtime
+Four 9s -> 99.99% availability -> 1 hour per year
+Five 9s -> 99.999% availibility -> 6 minutes per year
+
+Availability is not additive
+
+Additive metrics:
+
+MTBF - Mean Time Between Failures
+AFR - Annual Failure Rate
+
+
+Error Detection and Correction
+
+Parity - 1 bit per "some amount of memory" (a byte, word, etc.).  That bit
+         (the parity bit) has the value "number of ones in the bitstring" mod
+         2; that is, zero if there are an evan number of ones in the
+         protected data, otherwise one.
+         This allows us to detect single bit errors in the region, including
+         the parity bit itself.
+         If the parity is wrong, raise a signal.
+         Detects single-bit errors, nothing else.
+
+ECC - Error Checking Codes
+      Most common is the Hamming Code (detects two bit errors, corrects one
+      bit errors)
+
+Hamming Codes:
+
+1) Number your bits left to right starting from 1
+   Each bit in your data is counted, plus an extra bit is added for each
+   power of two in your counting
+
+   Value 01101001
+
+   123456789111
+            012
+   hh1h234h5678
+     0 110 1001
+ 1 * * * * * *
+ 2  **  **  **
+ 4    ****    *
+ 8        *****
+   010111001001              ->   Hamming bits: 0110 and data: 01101001
+   010110001001  <- Changed bit 6, check and correct it
+ 1 * * * * * *  o
+ 2  **  **  **  x
+ 4    ****    * x
+ 8        ***** o
+ 2 + 4 = 6 -> bit 6 is incorrect
+  010111001001
+
+   010111001001
+   010011001001  <- Changed bit 4 (a Hamming bit), check and correct it
+ 1 * * * * * *  o
+ 2  **  **  **  o
+ 4    ****    * x
+ 8        ***** o
+
+
+Another example:
+
+   Value 11100101
+
+   123456789111
+            012
+   hh1h234h5678
+     1 110 0101 
+ 1 * * * * * *
+ 2  **  **  **
+ 4    ****    *
+ 8        *****
+   011111000101
+   011111010101
+ 1 * * * * * *  o
+ 2  **  **  **  o
+ 4    ****    * o
+ 8        ***** x
+Error is in bit 8.
+
+In practice, Hamming bits will sit "beside" the data, not be inserted within
+it.
+
+One more 8-bit example:
+
+   Value 00101110
+
+   123456789111
+            012
+   hh1h234h5678
+     0 010 1110
+ 1 * * * * * *
+ 2  **  **  **
+ 4    ****    *
+ 8        *****
+   010101011110
+   010001011110
+ 1 * * * * * *  o
+ 2  **  **  **  o
+ 4    ****    * x
+ 8        ***** o
+
+Add up bits that are wrong.  Bit 4 was changed.
+
+One more, this time 16 bits:
+
+   Value 1001001011101011
+
+   123456789111111111122
+            012345678901
+   hh1h234h5678901h23456
+     1 001 0010111 01011
+ 1 * * * * * * * * * * *
+ 2  **  **  **  **  **  
+ 4    ****    ****    **
+ 8        ********
+16                ******
+   001000100010111101011
+   001000100010110101011
+ 1 * * * * * * * * * * * x
+ 2  **  **  **  **  **   x
+ 4    ****    ****    ** x
+ 8        ********       x
+16                ****** o
+1 + 2 + 4 + 8 = 15 
+
+What do we do in the event of a cache miss?
+
+* Trivial for a read: Go down to the next level and fetch from there.
+* Writes need to trickle down through the memory heirarchy to write the data
+  at all levels
+** Every write has to go all the way through the heirarchy and write to main
+   memroy - Very expensive!  Millions of cycles!
+** Handled in two possible ways:
+*** Write Back caching: Writes only to the highest level cache.  Doesn't
+    write to lower levels until the information is ejected from the level
+    above.  Fast, because it doesn't doesn't replace anything in
+    lower levels until higher levels are ejected
+**** Fast, but also gets very complicated.  Consider the case of a multi-core
+     processor with shared L2, and an application with a shared address
+     space; if one process updates a value, the other could read it from L2
+     before the first updates it.
+*** Write Through caching: Immediately writes the value to all levels of the
+    memory heirarchy.
+**** Much simpler, but requires a lot of memory bandwidth.  A write buffer
+     helps eliminate the bandwidth problem
+
+Virtual Memory
+* Created to allow use of disk as secondary memory
+** When you hear a magnetic disk making a lot of noise and the computer is
+   going very slowly, this is cause by the operating system servicing memory
+   interrupts to handle memory swaps to and from disk.
+* Allows each program to have its own address space.
+** The hardware and O/S cooperate to handle protection and translation
+
+My laptop: 1GB physical RAM -> 2^30 bytes -> 30 bit address space
+           2^47 virtual bytes -> 47 bit address space
+
+           The virtual space is 2^17 (=131072) times the size of the physical
+           space. 
+           2^47 ->2^7 TB -> 128 TB of virtual address space
+
+
+Memory Protection - Allows for the sharing of code and data among multiple
+                    processes (code: .so in Linux or UNIX, .dll in windows)
+                    Requires OS and hardware to work together to implement:
+                      * Processor must have a "privileged mode" (kernel mode,
+                        supervisor mode)
+                      * Privileged instructions, only executable in kernel
+                        mode
+                      * Page tables are only accessable in kernel mode
+  In C, when you get a "segmentation fault", it's actually a page fault.
+                          ^ An anachronism
+
+
+Virtual Memory impacts cache design
+* Cache is entirely physical (physically indexed and physically tagged)
+  - Must resolve virtual addresses before going to the cache
+* Cache is entirely virtual (virtually indexed and virtually tagged)
+  - Addresses are not unique
+    Very complex; not used
+* Cache is virtually indexed and physically tagged (hybrid)
+  - Index and offset bits are availabie immediately (from virtual address)
+  - Must resolve virtual address before we can check tag
+* Cache is physically indexed and virtually tagged (hybrid)
+  - Doesn't make sense.  Index is needed before tag.
+
+Example page table from figure:
+
+64-bit Virtual address space
+8 GB RAM
+4 kB pages -> 2^12 bits -> 12 bit index (given a virtual address, the low
+                                         order 12 bits are physical)
+64-bit address space - 12 bit index = 52 bit page numbers
+
+If the page table is fully resident in memory, it requires 2^52 entries.
+Each entry is 52 bits -> 2^52 * 52 bits -> 26 PB page table! -> Page tables
+are not simply arrays of physical page numbers!
+
+
+Hierarchical Page Tables
+
+Example from figure:
+Each level has 512 entries
+We have a 36-bit physical address space (64 GB)
+
+4 kB pages w/ 8 byte addresses -> 512 addresses per page
+
+512 = 2^9 -> 9 highest-order bits of the address index the lowest level page
+9 bits at the next level, and 9 at the next, and that leaves 9 more bits to
+resolve a physical address -> 36 bit address space / 9 bit per level = 4
+levels in the heirarchy
+
+Much (understatement!) better use of space, but the tradeoff is the latency
+involved in resolving indirection.
+
+
+Inverted Page Tables
+
+Page table is owned by the OS; There is only one page table (not one per
+process, as in the earlier methods)
+Number of entries is equal to the number of physical pages
+
+2^33 / 2^12 -> 2^21 (~2 million) entries in the page table
+
+Indexed by a hash of the virtual address and the process ID (PID); use
+chained hashing to resolve conflicts.
+
+Page table entry:
+  ------------------------------------------------------------------
+  | Physical page # | PID | Page table index if next link in chain |
+  ------------------------------------------------------------------
+
+With a good hash function, expected number of probes is about 1.5
+
+Tradeoffs: Very good space efficieny
+           Latency to calculate hash function
+           Non-deterministic latency
+
+
+The TLB (Translation Lookaside Buffer)
+
+A TLB is a fully-associative cache of page table entries.
+
+Fully associative memory is expensive, mostly because of the
+comparitor-per-entry and the busses, but also the MUX and De-MUX hardware
+isn't free, so space is an issue.  Also an issue is delay.
+
+Why a TLB?
+
+With a cached page table entry, we don't need to go to the page table
+(assuming a TLB hit).  Accessing a TLB takes < 1 cycle.  Missing in the TLB
+takes 10s-100s of cycles (depending on page table design).
+TLB miss rates are typically in the range of 0.1%-1.0%.  Which is really
+good!
+TLBs typically have 16-512 entries
+Misses are usually handled in software (although hardware solutions do
+exist).
+
+TLBs keep an access bit which is periodically zeroed.  When a line must be
+ejected, the hardware chooses one with a zero in the access bit (an example
+of not recently used).
